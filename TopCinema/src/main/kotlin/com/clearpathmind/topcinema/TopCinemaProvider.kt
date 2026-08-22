@@ -251,7 +251,7 @@ class TopCinema : MainAPI() {
             }
         }
 
-        sources.apmap { src ->
+        sources.toList().amap { src ->
             runCatching {
                 loadExtractor(src, watchUrl, subtitleCallback, callback)
             }
