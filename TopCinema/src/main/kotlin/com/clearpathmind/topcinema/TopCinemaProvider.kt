@@ -3,6 +3,8 @@ package com.clearpathmind.topcinema
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 class TopCinema : MainAPI() {
@@ -11,7 +13,6 @@ class TopCinema : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime, TvType.AsianDrama)
     override var lang = "ar"
     override val hasMainPage = true
-    override val hasSearch = true
 
     companion object {
         // Placeholder image used by the theme before lazy-loading
