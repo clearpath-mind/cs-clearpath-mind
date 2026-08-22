@@ -174,6 +174,7 @@ class TopCinema : MainAPI() {
                 newMovieSearchResponse(cleanName, rep.url, rep.type ?: TvType.Movie) {
                     this.posterUrl = rep.posterUrl
                     this.quality = rep.quality
+                    this.score = rep.score
                 }
             }
         }
