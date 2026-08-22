@@ -115,8 +115,8 @@ class TopCinema : MainAPI() {
         return fallback
     }
 
-    private fun parseCards(doc: Document): List<SearchResponse> =
-        doc.select("div.Small--Box").mapNotNull { card ->
+    private fun parseCards(root: Element): List<SearchResponse> =
+        root.select("div.Small--Box").mapNotNull { card ->
             val a = card.selectFirst("a") ?: return@mapNotNull null
             val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val title = card.selectFirst("h3.title")?.text()?.takeIf { it.isNotBlank() }
@@ -338,6 +338,9 @@ class TopCinema : MainAPI() {
                 this.year = year
                 this.score = rating?.let { Score.from(it, 10) }
                 this.tags = tags
+                // "مسلسلات اخرى" tab on series pages
+                this.recommendations = doc.selectFirst("section.otherser")
+                    ?.let { parseCards(it) }?.ifEmpty { null }
             }
         }
 
@@ -347,6 +350,9 @@ class TopCinema : MainAPI() {
             this.year = year
             this.score = rating?.let { Score.from(it, 10) }
             this.tags = tags
+            // "مشاهدة عروض اخري" section on movie pages
+            this.recommendations = doc.selectFirst(".related--Posts")
+                ?.let { parseCards(it) }?.ifEmpty { null }
         }
     }
 
