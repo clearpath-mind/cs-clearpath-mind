@@ -1,6 +1,8 @@
 package com.clearpathmind.topcinema
 
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.SubtitleFile
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -14,121 +16,118 @@ class TopCinema : MainAPI() {
     override var lang = "ar"
     override val hasMainPage = true
 
-    companion object {
-        // Placeholder image used by the theme before lazy-loading
-        private const val PLACEHOLDER = "cover.jpg"
+    // Placeholder image used by the theme before lazy-loading
+    private val placeholder = "cover.jpg"
 
-        private val ARABIC_ORDINALS = mapOf(
-            "الاول" to 1, "الأول" to 1,
-            "الثاني" to 2,
-            "الثالث" to 3,
-            "الرابع" to 4,
-            "الخامس" to 5,
-            "السادس" to 6,
-            "السابع" to 7,
-            "الثامن" to 8,
-            "التاسع" to 9,
-            "العاشر" to 10,
-            "الحادي عشر" to 11,
-            "الثاني عشر" to 12
-        )
+    private val arabicOrdinals = mapOf(
+        "الاول" to 1, "الأول" to 1,
+        "الثاني" to 2,
+        "الثالث" to 3,
+        "الرابع" to 4,
+        "الخامس" to 5,
+        "السادس" to 6,
+        "السابع" to 7,
+        "الثامن" to 8,
+        "التاسع" to 9,
+        "العاشر" to 10,
+        "الحادي عشر" to 11,
+        "الثاني عشر" to 12
+    )
 
-        // Strip the leading type word and trailing translation suffixes from titles
-        private val TITLE_NOISE = listOf(
-            "مترجم اون لاين", "مترجمة اون لاين", "اون لاين", "مترجم كامل", "مترجمة كاملة", "كامل",
-            "مترجمة", "مترجم"
-        )
+    // Strip the leading type word and trailing translation suffixes from titles
+    private val titleNoise = listOf(
+        "مترجم اون لاين", "مترجمة اون لاين", "اون لاين", "مترجم كامل", "مترجمة كاملة", "كامل",
+        "مترجمة", "مترجم"
+    )
 
-        private fun cleanTitle(raw: String): String {
-            var t = raw.trim()
-            t = t.removePrefix("فيلم ").removePrefix("مسلسل ").removePrefix("انمي ").trim()
-            for (noise in TITLE_NOISE) {
-                if (t.endsWith(noise)) {
-                    t = t.removeSuffix(noise).trim()
-                    break
-                }
-            }
-            return t.ifBlank { raw }
-        }
-
-        private fun posterOf(card: Element): String? {
-            val img = card.selectFirst(".Poster img") ?: card.selectFirst("img") ?: return null
-            val src = img.attr("data-src").ifBlank { img.attr("src") }
-            return src.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER) }
-        }
-
-        private fun qualityOf(card: Element): String? =
-            card.select("ul.liList li")
-                .map { it.text() }
-                .firstOrNull { it.contains(Regex("\\d{3,4}\\s*p", RegexOption.IGNORE_CASE)) }
-
-        private fun searchQualityOf(card: Element): SearchQuality? {
-            val q = qualityOf(card)?.lowercase() ?: return null
-            return when {
-                "bluray" in q || "blu-ray" in q -> SearchQuality.BlueRay
-                "web-dl" in q || "webdl" in q || "web" in q -> SearchQuality.WebRip
-                "hdcam" in q -> SearchQuality.HdCam
-                "hdts" in q -> SearchQuality.HdCam
-                "hdrip" in q -> SearchQuality.HD
-                else -> null
+    private fun cleanTitle(raw: String): String {
+        var t = raw.trim()
+        t = t.removePrefix("فيلم ").removePrefix("مسلسل ").removePrefix("انمي ").trim()
+        for (noise in titleNoise) {
+            if (t.endsWith(noise)) {
+                t = t.removeSuffix(noise).trim()
+                break
             }
         }
+        return t.ifBlank { raw }
+    }
 
-        private fun parseCards(doc: Document): List<SearchResponse> =
-            doc.select("div.Small--Box").mapNotNull { card ->
-                val a = card.selectFirst("a") ?: return@mapNotNull null
-                val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val title = card.selectFirst("h3.title")?.text()?.takeIf { it.isNotBlank() }
-                    ?: a.attr("title").takeIf { it.isNotBlank() }
-                    ?: return@mapNotNull null
-                newMovieSearchResponse(
-                    cleanTitle(title),
-                    href,
-                    guessTvType(title),
-                ) {
-                    posterUrl = posterOf(card)
-                    quality = searchQualityOf(card)
-                }
-            }.distinctBy { it.url }
+    private fun posterOf(card: Element): String? {
+        val img = card.selectFirst(".Poster img") ?: card.selectFirst("img") ?: return null
+        val src = img.attr("data-src").ifBlank { img.attr("src") }
+        return src.takeIf { it.isNotBlank() && !it.contains(placeholder) }
+    }
 
-        private fun guessTvType(title: String): TvType = when {
-            title.contains("انمي") -> TvType.Anime
-            title.contains("مسلسل") -> TvType.TvSeries
-            else -> TvType.Movie
+    private fun qualityOf(card: Element): String? =
+        card.select("ul.liList li")
+            .map { it.text() }
+            .firstOrNull { it.contains(Regex("\\d{3,4}\\s*p", RegexOption.IGNORE_CASE)) }
+
+    private fun searchQualityOf(card: Element): SearchQuality? {
+        val q = qualityOf(card)?.lowercase() ?: return null
+        return when {
+            "bluray" in q || "blu-ray" in q -> SearchQuality.BlueRay
+            "web-dl" in q || "webdl" in q || "web" in q -> SearchQuality.WebRip
+            "hdcam" in q -> SearchQuality.HdCam
+            "hdts" in q -> SearchQuality.HdCam
+            "hdrip" in q -> SearchQuality.HD
+            else -> null
+        }
+    }
+
+    private fun guessTvType(title: String): TvType = when {
+        title.contains("انمي") -> TvType.Anime
+        title.contains("مسلسل") -> TvType.TvSeries
+        else -> TvType.Movie
+    }
+
+    private fun parseSeasonNumber(text: String, fallback: Int): Int {
+        Regex("الموسم\\s+(\\d+)").find(text)?.groupValues?.get(1)?.let { return it.toIntOrNull() ?: fallback }
+        arabicOrdinals.forEach { (word, num) ->
+            if (text.contains(word) && text.contains("الموسم")) return num
+        }
+        return fallback
+    }
+
+    private fun parseCards(doc: Document): List<SearchResponse> =
+        doc.select("div.Small--Box").mapNotNull { card ->
+            val a = card.selectFirst("a") ?: return@mapNotNull null
+            val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val title = card.selectFirst("h3.title")?.text()?.takeIf { it.isNotBlank() }
+                ?: a.attr("title").takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            newMovieSearchResponse(
+                cleanTitle(title),
+                href,
+                guessTvType(title),
+            ) {
+                posterUrl = posterOf(card)
+                quality = searchQualityOf(card)
+            }
+        }.distinctBy { it.url }
+
+    private fun parseEpisodes(doc: Document, seasonNumber: Int): List<Episode> =
+        doc.select(".allepcont .row a").mapNotNull { a ->
+            val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val name = a.attr("title").takeIf { it.isNotBlank() }
+                ?: a.selectFirst(".ep-info h2")?.text()
+                ?: return@mapNotNull null
+            val epNum = Regex("(\\d+)")
+                .find(a.selectFirst(".epnum")?.text() ?: "")?.groupValues?.get(1)?.toIntOrNull()
+            newEpisode(href) {
+                this.name = cleanTitle(name)
+                this.episode = epNum
+                this.season = seasonNumber
+                this.posterUrl = posterOf(a)
+            }
         }
 
-        private fun parseSeasonNumber(text: String, fallback: Int): Int {
-            Regex("الموسم\\s+(\\d+)").find(text)?.groupValues?.get(1)?.let { return it.toIntOrNull() ?: fallback }
-            ARABIC_ORDINALS.forEach { (word, num) ->
-                if (text.contains(word) && text.contains("الموسم")) return num
-            }
-            return fallback
-        }
-
-        private fun parseEpisodes(doc: Document, seasonNumber: Int): List<Episode> =
-            doc.select(".allepcont .row a").mapNotNull { a ->
-                val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val name = a.attr("title").takeIf { it.isNotBlank() }
-                    ?: a.selectFirst(".ep-info h2")?.text()
-                    ?: return@mapNotNull null
-                val epNum = Regex("(\\d+)")
-                    .find(a.selectFirst(".epnum")?.text() ?: "")?.groupValues?.get(1)?.toIntOrNull()
-                Episode(
-                    data = href,
-                    name = cleanTitle(name),
-                    episode = epNum,
-                    season = seasonNumber,
-                    posterUrl = posterOf(a),
-                )
-            }
-
-        private fun pagedUrl(base: String, page: Int): String {
-            if (page <= 1) return base
-            return if ("?" in base) {
-                base.replace("?", "/page/$page/?")
-            } else {
-                base.trimEnd('/') + "/page/$page/"
-            }
+    private fun pagedUrl(base: String, page: Int): String {
+        if (page <= 1) return base
+        return if ("?" in base) {
+            base.replace("?", "/page/$page/?")
+        } else {
+            base.trimEnd('/') + "/page/$page/"
         }
     }
 
