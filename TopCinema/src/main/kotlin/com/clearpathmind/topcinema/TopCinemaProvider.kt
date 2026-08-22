@@ -132,6 +132,8 @@ class TopCinema : MainAPI() {
 
     // Groups near-identical episode cards ("... الحلقة 61", "... الحلقة 62", ...)
     // under one result, preferring the series/movie main card when present.
+    // If only episode cards exist, the representative keeps the clean base title
+    // instead of e.g. "Show الموسم الثالث الحلقة 8".
     private fun groupCards(cards: List<SearchResponse>): List<SearchResponse> {
         val groups = LinkedHashMap<String, MutableList<Pair<SearchResponse, Boolean>>>()
         for (card in cards) {
@@ -139,7 +141,17 @@ class TopCinema : MainAPI() {
             groups.getOrPut(baseTitleKey(card.name)) { mutableListOf() }.add(card to isEpisode)
         }
         return groups.values.mapNotNull { group ->
-            group.firstOrNull { !it.second }?.first ?: group.firstOrNull()?.first
+            val (rep, repIsEpisode) = group.firstOrNull { !it.second } ?: group.firstOrNull()
+                ?: return@mapNotNull null
+            if (!repIsEpisode) {
+                rep
+            } else {
+                val cleanName = baseTitleKey(rep.name).ifBlank { rep.name }
+                newMovieSearchResponse(cleanName, rep.url, rep.type) {
+                    this.posterUrl = rep.posterUrl
+                    this.quality = rep.quality
+                }
+            }
         }
     }
 
