@@ -1,0 +1,25 @@
+[
+    {
+        "iconUrl": "https://topcinemaa.co/wp-content/uploads/2023/05/cropped-icon-192x192.png",
+        "fileHash": "sha256-be8ba82411674e123a118cc5c57bc326a87030b653364ade8b821d1b8741e84b",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/clearpath-mind/cs-clearpath-mind",
+        "fileSize": 29013,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "clearpath-mind"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AsianDrama"
+        ],
+        "version": 11,
+        "internalName": "TopCinema",
+        "description": "TopCinema - \u0627\u0641\u0644\u0627\u0645 \u0648\u0645\u0633\u0644\u0633\u0644\u0627\u062a \u0627\u0646\u0645\u064a \u0648\u0627\u0633\u064a\u0648\u064a\u0629 \u0645\u062a\u0631\u062c\u0645\u0629",
+        "url": "https://raw.githubusercontent.com/clearpath-mind/cs-clearpath-mind/builds/TopCinema.cs3",
+        "name": "TopCinema"
+    }
+]
