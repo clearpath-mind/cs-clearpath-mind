@@ -147,7 +147,7 @@ class TopCinema : MainAPI() {
                 rep
             } else {
                 val cleanName = baseTitleKey(rep.name).ifBlank { rep.name }
-                newMovieSearchResponse(cleanName, rep.url, rep.type) {
+                newMovieSearchResponse(cleanName, rep.url, rep.type ?: TvType.Movie) {
                     this.posterUrl = rep.posterUrl
                     this.quality = rep.quality
                 }
