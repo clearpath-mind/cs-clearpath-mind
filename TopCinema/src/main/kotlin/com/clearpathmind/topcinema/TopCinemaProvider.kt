@@ -279,7 +279,8 @@ class TopCinema : MainAPI() {
         val title = cleanTitle(rawTitle)
         val poster = posterOf(doc)
         val plot = doc.selectFirst(".story p")?.text()?.trim()
-        val rating = doc.selectFirst(".imdbBox span")?.text()?.trim()?.toFloatOrNull()
+        val rating = doc.selectFirst(".imdbR span")?.text()?.trim()?.toFloatOrNull()
+            ?: doc.selectFirst(".imdbBox span")?.text()?.trim()?.toFloatOrNull()
         // Genres live in ul.RightTaxContent under the "نوع الفيلم/المسلسل" row
         val tags = doc.select("ul.RightTaxContent li")
             .firstOrNull { it.selectFirst("span")?.text()?.contains("نوع") == true }
@@ -287,7 +288,7 @@ class TopCinema : MainAPI() {
             ?: emptyList()
         val year = rightTaxNumber(doc, "الصدور")
             ?: Regex("(19|20)\\d{2}").find(rawTitle)?.value?.toIntOrNull()
-        val duration = rightTaxNumber(doc, "التوقيت")
+        val duration = rightTaxNumber(doc, "توقيت")
         val tvType = guessTvType(rawTitle)
 
         if (url.contains("/series/")) {
