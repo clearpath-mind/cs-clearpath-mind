@@ -339,8 +339,9 @@ class TopCinema : MainAPI() {
                 this.score = rating?.let { Score.from(it, 10) }
                 this.tags = tags
                 // "مسلسلات اخرى" tab on series pages
-                this.recommendations = doc.selectFirst("section.otherser")
-                    ?.let { parseCards(it) }?.ifEmpty { null }
+                val otherSeries: List<SearchResponse>? =
+                    doc.selectFirst("section.otherser")?.let { parseCards(it) }
+                this.recommendations = if (otherSeries.isNullOrEmpty()) null else otherSeries
             }
         }
 
@@ -351,8 +352,9 @@ class TopCinema : MainAPI() {
             this.score = rating?.let { Score.from(it, 10) }
             this.tags = tags
             // "مشاهدة عروض اخري" section on movie pages
-            this.recommendations = doc.selectFirst(".related--Posts")
-                ?.let { parseCards(it) }?.ifEmpty { null }
+            val relatedMovies: List<SearchResponse>? =
+                doc.selectFirst(".related--Posts")?.let { parseCards(it) }
+            this.recommendations = if (relatedMovies.isNullOrEmpty()) null else relatedMovies
         }
     }
 
