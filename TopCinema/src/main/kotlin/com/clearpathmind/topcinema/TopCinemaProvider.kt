@@ -48,6 +48,9 @@ class TopCinema : MainAPI() {
                 break
             }
         }
+        // Strip standalone years so the app's own "(year)" label doesn't duplicate
+        // e.g. "Shelter 2026" -> "Shelter"
+        t = t.replace(Regex("\\s+\\b(?:19|20)\\d{2}\\b"), "").trim()
         return t.ifBlank { raw }
     }
 
@@ -143,6 +146,13 @@ class TopCinema : MainAPI() {
             base.trimEnd('/') + "/page/$page/"
         }
     }
+
+    // Reads a number from a ul.RightTaxContent row by label,
+    // e.g. "موعد الصدور : 2026" or "توقيت الفيلم : 107 دقيقة"
+    private fun rightTaxNumber(doc: Document, label: String): Int? =
+        doc.select("ul.RightTaxContent li")
+            .firstOrNull { it.selectFirst("span")?.text()?.contains(label) == true }
+            ?.text()?.let { Regex("(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() }
 
     // Groups near-identical episode cards ("... الحلقة 61", "... الحلقة 62", ...)
     // under one result, preferring the series/movie main card when present.
@@ -275,7 +285,9 @@ class TopCinema : MainAPI() {
             .firstOrNull { it.selectFirst("span")?.text()?.contains("نوع") == true }
             ?.select("a")?.map { it.text() }?.filter { it.isNotBlank() }
             ?: emptyList()
-        val year = Regex("(19|20)\\d{2}").find(rawTitle)?.value?.toIntOrNull()
+        val year = rightTaxNumber(doc, "الصدور")
+            ?: Regex("(19|20)\\d{2}").find(rawTitle)?.value?.toIntOrNull()
+        val duration = rightTaxNumber(doc, "التوقيت")
         val tvType = guessTvType(rawTitle)
 
         if (url.contains("/series/")) {
@@ -327,6 +339,7 @@ class TopCinema : MainAPI() {
                 this.plot = (seriesPlot ?: plot)?.takeIf { it.isNotBlank() }
                     ?: cleanOgDescription(doc)
                 this.year = year
+                this.duration = duration
                 this.score = rating?.let { Score.from(it, 10) }
                 this.tags = tags
                 // "مسلسلات اخرى" tab on series pages
@@ -341,6 +354,7 @@ class TopCinema : MainAPI() {
             this.posterUrl = poster
             this.plot = plot?.takeIf { it.isNotBlank() } ?: cleanOgDescription(doc)
             this.year = year
+            this.duration = duration
             this.score = rating?.let { Score.from(it, 10) }
             this.tags = tags
             // "مشاهدة عروض اخري" section on movie pages
