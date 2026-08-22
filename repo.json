@@ -1,0 +1,8 @@
+{
+    "name": "cs-clearpath-mind",
+    "description": "TopCinema extension for topcinemaa.co",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://raw.githubusercontent.com/clearpath-mind/cs-clearpath-mind/builds/plugins.json"
+    ]
+}
