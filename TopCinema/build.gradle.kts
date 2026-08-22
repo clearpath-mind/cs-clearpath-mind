@@ -1,7 +1,7 @@
-version = 1
+version = 2
 
 cloudstream {
-    description = "TopCinema (topcinemaa.co) - افلام ومسلسلات انمي واسيوية مترجمة"
+    description = "TopCinema - افلام ومسلسلات انمي واسيوية مترجمة"
     authors = listOf("clearpath-mind")
 
     /**

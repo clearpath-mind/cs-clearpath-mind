@@ -130,6 +130,68 @@ class TopCinema : MainAPI() {
         }
     }
 
+    // Groups near-identical episode cards ("... الحلقة 61", "... الحلقة 62", ...)
+    // under one result, preferring the series/movie main card when present.
+    private fun groupCards(cards: List<SearchResponse>): List<SearchResponse> {
+        val groups = LinkedHashMap<String, MutableList<Pair<SearchResponse, Boolean>>>()
+        for (card in cards) {
+            val isEpisode = card.name.contains("الحلقة")
+            groups.getOrPut(baseTitleKey(card.name)) { mutableListOf() }.add(card to isEpisode)
+        }
+        return groups.values.mapNotNull { group ->
+            group.firstOrNull { !it.second }?.first ?: group.firstOrNull()?.first
+        }
+    }
+
+    private fun baseTitleKey(raw: String): String {
+        var t = raw.trim()
+        t = t.replace(Regex("\\s+الحلقة\\s+\\d+[^\\s]*"), "")
+        t = t.replace(Regex("\\s+والاخيرة"), "")
+        t = t.replace(Regex("\\s+الموسم\\s+[^\\s]+"), "")
+        return t.trim()
+    }
+
+    // Season pages render only ~51 episodes inline (getMoreByScroll lazy loading).
+    // The theme's AJAX endpoint returns the complete list for a season.
+    private suspend fun fetchAllEpisodes(
+        seasonDoc: Document,
+        inline: List<Episode>,
+        seasonNumber: Int
+    ): List<Episode> {
+        val first = inline.firstOrNull() ?: return inline
+        val watchText = runCatching {
+            app.get(first.data.trimEnd('/') + "/watch/").text
+        }.getOrNull() ?: return inline
+        val watchDoc = Jsoup.parse(watchText)
+        val togglerLink = watchDoc.selectFirst(".seasons--toggler a[data-id][data-season]")
+            ?: return inline
+        val postId = togglerLink.attr("data-id")
+        val seasonId = togglerLink.attr("data-season")
+        if (postId.isBlank() || seasonId.isBlank()) return inline
+
+        val ajaxHtml = runCatching {
+            app.post(
+                "$mainUrl/wp-content/themes/movies2023/Ajaxat/Single/Episodes.php",
+                data = mapOf("season" to seasonId, "post_id" to postId),
+                headers = mapOf(
+                    "Referer" to mainUrl,
+                    "X-Requested-With" to "XMLHttpRequest"
+                )
+            ).text
+        }.getOrNull() ?: return inline
+
+        val parsed = Jsoup.parse(ajaxHtml).select("a[href]").mapNotNull { a ->
+            val num = a.selectFirst("em")?.text()?.toIntOrNull() ?: return@mapNotNull null
+            val postUrl = a.attr("href").removeSuffix("/watch/").trimEnd('/')
+            if (postUrl.isBlank()) null
+            else newEpisode(postUrl) {
+                this.season = seasonNumber
+                this.episode = num
+            }
+        }
+        return if (parsed.size > inline.size) parsed else inline
+    }
+
     override val mainPage = mainPageOf(
         "$mainUrl/recent/" to "المضاف حديثا",
         "$mainUrl/movies/" to "الافلام",
@@ -154,8 +216,10 @@ class TopCinema : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return parseCards(
-            app.get("$mainUrl/?s=${URLEncoder.encode(query, "UTF-8")}").document
+        return groupCards(
+            parseCards(
+                app.get("$mainUrl/?s=${URLEncoder.encode(query, "UTF-8")}").document
+            )
         )
     }
 
@@ -164,6 +228,18 @@ class TopCinema : MainAPI() {
         val rawTitle = doc.selectFirst("h1.post-title")?.text()?.trim()
             ?: doc.selectFirst("h1.post-title a")?.text()?.trim()
             ?: doc.title()
+
+        // A single episode post was opened directly (e.g. from grouped search results).
+        // Redirect to its parent series so the user sees the whole show.
+        if (!url.contains("/series/") && rawTitle.contains("الحلقة")) {
+            val seriesUrl = doc.select("#mpbreadcrumbs a[href*=\"/series/\"]")
+                .map { it.attr("href") }
+                .firstOrNull { it != url }
+            if (seriesUrl != null) {
+                return load(seriesUrl)
+            }
+        }
+
         val title = cleanTitle(rawTitle)
         val poster = doc.selectFirst("meta[property=\"og:image\"]")?.attr("content")
         val plot = doc.selectFirst(".story p")?.text()?.trim()
@@ -181,15 +257,29 @@ class TopCinema : MainAPI() {
 
             val episodes: List<Episode> = if (seasonLinks.isEmpty()) {
                 // The url is already a single-season page listing its episodes
-                parseEpisodes(doc, parseSeasonNumber(rawTitle, 1))
+                val inline = parseEpisodes(doc, parseSeasonNumber(rawTitle, 1))
+                val claimed = Regex("الحلقات\\s*\\[\\s*(\\d+)\\s*\\]")
+                    .find(doc.text())?.groupValues?.get(1)?.toIntOrNull()
+                if (claimed != null && inline.size < claimed) {
+                    fetchAllEpisodes(doc, inline, parseSeasonNumber(rawTitle, 1))
+                } else {
+                    inline
+                }
             } else {
                 seasonLinks.amapIndexed { index, s ->
                     val seasonUrl = s.attr("href")
                     val seasonDoc = runCatching { app.get(seasonUrl).document }.getOrNull()
-                    val sn = seasonDoc?.let { d ->
-                        d.selectFirst("h1.post-title")?.text()?.let { parseSeasonNumber(it, index + 1) }
-                    } ?: (index + 1)
-                    seasonDoc?.let { parseEpisodes(it, sn) } ?: emptyList()
+                        ?: return@amapIndexed emptyList()
+                    val sn = seasonDoc.selectFirst("h1.post-title")?.text()
+                        ?.let { parseSeasonNumber(it, index + 1) } ?: (index + 1)
+                    val inline = parseEpisodes(seasonDoc, sn)
+                    val claimed = Regex("الحلقات\\s*\\[\\s*(\\d+)\\s*\\]")
+                        .find(seasonDoc.text())?.groupValues?.get(1)?.toIntOrNull()
+                    if (claimed != null && inline.size < claimed) {
+                        fetchAllEpisodes(seasonDoc, inline, sn)
+                    } else {
+                        inline
+                    }
                 }.flatten().sortedWith(compareBy({ it.season ?: 1 }, { it.episode ?: 0 }))
             }
 
