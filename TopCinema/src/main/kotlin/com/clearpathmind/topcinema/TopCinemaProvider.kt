@@ -57,6 +57,33 @@ class TopCinema : MainAPI() {
         return src.takeIf { it.isNotBlank() && !it.contains(placeholder) }
     }
 
+    // Series pages have no og:image; their poster lives in the single header block
+    private fun posterOf(doc: Document): String? {
+        doc.selectFirst("meta[property=\"og:image\"]")?.attr("content")
+            ?.takeIf { it.isNotBlank() && !it.contains(placeholder) }
+            ?.let { return it }
+        val img = doc.selectFirst(".MainSingle .left .image img")
+            ?: doc.selectFirst(".Poster img")
+            ?: return null
+        val src = img.attr("data-src").ifBlank { img.attr("src") }
+        return src.takeIf { it.isNotBlank() && !it.contains(placeholder) }
+    }
+
+    // og:description is series-level but wrapped in promo boilerplate; clean it up
+    private fun cleanOgDescription(doc: Document): String? {
+        val raw = doc.selectFirst("meta[property=\"og:description\"]")?.attr("data-content")
+            ?: doc.selectFirst("meta[property=\"og:description\"]")?.attr("content")
+            ?: return null
+        var t = raw.replace(Regex("<[^>]*>"), " ")
+        for (noise in listOf(
+            "مشاهدة وتحميل", "مشاهدة حلقات", "بجودة HD اون لاين وتحميل مباشر",
+            "تحميل مباشر", "اون لاين", "اونلاين", "مترجم كامل", "كامل"
+        )) {
+            t = t.replace(noise, " ")
+        }
+        return t.trim().ifBlank { null }
+    }
+
     private fun qualityOf(card: Element): String? =
         card.select("ul.liList li")
             .map { it.text() }
@@ -253,7 +280,7 @@ class TopCinema : MainAPI() {
         }
 
         val title = cleanTitle(rawTitle)
-        val poster = doc.selectFirst("meta[property=\"og:image\"]")?.attr("content")
+        val poster = posterOf(doc)
         val plot = doc.selectFirst(".story p")?.text()?.trim()
         val rating = doc.selectFirst(".imdbBox span")?.text()?.trim()?.toFloatOrNull()
         val tags = doc.select(".catssection li a").map { it.text() }
@@ -267,37 +294,47 @@ class TopCinema : MainAPI() {
             }
             val seasonLinks = doc.select(".allseasonss .Small--Box.Season a")
 
+            // The site puts the LATEST season's synopsis in the series page story,
+            // so prefer the story from the lowest-numbered season page instead.
+            var seriesPlot: String? = null
+
             val episodes: List<Episode> = if (seasonLinks.isEmpty()) {
                 // The url is already a single-season page listing its episodes
-                val inline = parseEpisodes(doc, parseSeasonNumber(rawTitle, 1))
+                val sn = parseSeasonNumber(rawTitle, 1)
+                val inline = parseEpisodes(doc, sn)
                 val claimed = Regex("الحلقات\\s*\\[\\s*(\\d+)\\s*\\]")
                     .find(doc.text())?.groupValues?.get(1)?.toIntOrNull()
                 if (claimed != null && inline.size < claimed) {
-                    fetchAllEpisodes(doc, inline, parseSeasonNumber(rawTitle, 1))
+                    fetchAllEpisodes(doc, inline, sn)
                 } else {
                     inline
                 }
             } else {
-                seasonLinks.amapIndexed { index, s ->
+                val perSeason = seasonLinks.amapIndexed { index, s ->
                     val seasonUrl = s.attr("href")
                     val seasonDoc = runCatching { app.get(seasonUrl).document }.getOrNull()
-                        ?: return@amapIndexed emptyList()
+                        ?: return@amapIndexed null
                     val sn = seasonDoc.selectFirst("h1.post-title")?.text()
                         ?.let { parseSeasonNumber(it, index + 1) } ?: (index + 1)
                     val inline = parseEpisodes(seasonDoc, sn)
                     val claimed = Regex("الحلقات\\s*\\[\\s*(\\d+)\\s*\\]")
                         .find(seasonDoc.text())?.groupValues?.get(1)?.toIntOrNull()
-                    if (claimed != null && inline.size < claimed) {
+                    val eps = if (claimed != null && inline.size < claimed) {
                         fetchAllEpisodes(seasonDoc, inline, sn)
                     } else {
                         inline
                     }
-                }.flatten().sortedWith(compareBy({ it.season ?: 1 }, { it.episode ?: 0 }))
+                    Triple(sn, eps, seasonDoc.selectFirst(".story p")?.text()?.trim())
+                }
+                perSeason.filterNotNull().minByOrNull { it.first }?.let { seriesPlot = it.third }
+                perSeason.filterNotNull().flatMap { it.second }
+                    .sortedWith(compareBy({ it.season ?: 1 }, { it.episode ?: 0 }))
             }
 
             return newTvSeriesLoadResponse(title, url, type, episodes) {
                 this.posterUrl = poster
-                this.plot = plot
+                this.plot = (seriesPlot ?: plot)?.takeIf { it.isNotBlank() }
+                    ?: cleanOgDescription(doc)
                 this.year = year
                 this.score = rating?.let { Score.from(it, 10) }
                 this.tags = tags
@@ -306,7 +343,7 @@ class TopCinema : MainAPI() {
 
         return newMovieLoadResponse(title, url, tvType, url) {
             this.posterUrl = poster
-            this.plot = plot
+            this.plot = plot?.takeIf { it.isNotBlank() } ?: cleanOgDescription(doc)
             this.year = year
             this.score = rating?.let { Score.from(it, 10) }
             this.tags = tags
