@@ -1,4 +1,4 @@
-version = 6
+version = 7
 
 cloudstream {
     description = "TopCinema - افلام ومسلسلات انمي واسيوية مترجمة"

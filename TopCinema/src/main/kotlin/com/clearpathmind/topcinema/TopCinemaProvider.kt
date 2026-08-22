@@ -89,17 +89,9 @@ class TopCinema : MainAPI() {
             .map { it.text() }
             .firstOrNull { it.contains(Regex("\\d{3,4}\\s*p", RegexOption.IGNORE_CASE)) }
 
-    private fun searchQualityOf(card: Element): SearchQuality? {
-        val q = qualityOf(card)?.lowercase() ?: return null
-        return when {
-            "bluray" in q || "blu-ray" in q -> SearchQuality.BlueRay
-            "web-dl" in q || "webdl" in q || "web" in q -> SearchQuality.WebRip
-            "hdcam" in q -> SearchQuality.HdCam
-            "hdts" in q -> SearchQuality.HdCam
-            "hdrip" in q -> SearchQuality.HD
-            else -> null
-        }
-    }
+    // IMDb rating badge on cards, e.g. <li class="imdbRating"><i></i> 8.1</li>
+    private fun ratingOf(card: Element): Float? =
+        card.selectFirst("li.imdbRating")?.text()?.trim()?.toFloatOrNull()
 
     private fun guessTvType(title: String): TvType = when {
         title.contains("انمي") -> TvType.Anime
@@ -128,7 +120,7 @@ class TopCinema : MainAPI() {
                 guessTvType(title),
             ) {
                 posterUrl = posterOf(card)
-                quality = searchQualityOf(card)
+                score = ratingOf(card)?.let { Score.from(it, 10) }
             }
         }.distinctBy { it.url }
 
@@ -283,7 +275,11 @@ class TopCinema : MainAPI() {
         val poster = posterOf(doc)
         val plot = doc.selectFirst(".story p")?.text()?.trim()
         val rating = doc.selectFirst(".imdbBox span")?.text()?.trim()?.toFloatOrNull()
-        val tags = doc.select(".catssection li a").map { it.text() }
+        // Genres live in ul.RightTaxContent under the "نوع الفيلم/المسلسل" row
+        val tags = doc.select("ul.RightTaxContent li")
+            .firstOrNull { it.selectFirst("span")?.text()?.contains("نوع") == true }
+            ?.select("a")?.map { it.text() }?.filter { it.isNotBlank() }
+            ?: emptyList()
         val year = Regex("(19|20)\\d{2}").find(rawTitle)?.value?.toIntOrNull()
         val tvType = guessTvType(rawTitle)
 
