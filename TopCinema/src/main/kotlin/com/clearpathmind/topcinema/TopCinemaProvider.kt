@@ -84,11 +84,6 @@ class TopCinema : MainAPI() {
         return t.trim().ifBlank { null }
     }
 
-    private fun qualityOf(card: Element): String? =
-        card.select("ul.liList li")
-            .map { it.text() }
-            .firstOrNull { it.contains(Regex("\\d{3,4}\\s*p", RegexOption.IGNORE_CASE)) }
-
     // IMDb rating badge on cards, e.g. <li class="imdbRating"><i></i> 8.1</li>
     private fun ratingOf(card: Element): Float? =
         card.selectFirst("li.imdbRating")?.text()?.trim()?.toFloatOrNull()
