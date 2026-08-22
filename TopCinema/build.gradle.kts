@@ -1,13 +1,33 @@
-package com.clearpathmind.topcinema
+version = 1
 
-import android.content.Context
-import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
-import com.lagradost.cloudstream3.plugins.Plugin
+cloudstream {
+    description = "TopCinema (topcinemaa.co) - افلام ومسلسلات انمي واسيوية مترجمة"
+    authors = listOf("clearpath-mind")
 
-@CloudstreamPlugin
-class TopCinemaPlugin : Plugin() {
-    override fun load(context: Context) {
-        // All providers should be added in this manner
-        registerMainAPI(TopCinema())
+    /**
+     * Status int as one of the following:
+     * 0: Down
+     * 1: Ok
+     * 2: Slow
+     * 3: Beta-only
+     **/
+    status = 1
+
+    tvTypes = listOf(
+        "Movie",
+        "TvSeries",
+        "Anime",
+        "AsianDrama"
+    )
+
+    requiresResources = false
+    language = "ar"
+
+    iconUrl = "https://topcinemaa.co/wp-content/uploads/2023/05/cropped-icon-192x192.png"
+}
+
+android {
+    buildFeatures {
+        buildConfig = true
     }
 }
